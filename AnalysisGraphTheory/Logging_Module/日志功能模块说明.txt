@@ -1,0 +1,33 @@
+log_data.m (主入口)
+├── classify_and_process.m (分类器)
+│   └── process_connectivity_analysis               % 连通性分析
+│   │  ├──
+│   │  ├──
+│   │  ├──
+│   │  └── 
+│   ├── process_network_build.m (网络构建处理器)
+│   │   ├── format_network_result.m                 - 格式化计算结果
+│   │   ├── format_network_input.m                  - 格式化输入参数
+│   │   ├── format_network_process.m                - 格式化计算过程
+│   │   ├── format_field_group.m                    - 批量格式化字段组
+│   │   ├── format_single_field.m                   - 格式化单个字段
+│   │   ├── format_matrix_field.m                   - 格式化矩阵字段
+│   │   ├── format_small_matrix.m                   - 格式化小矩阵
+│   │   ├── format_matrix_summary.m                 - 格式化大矩阵摘要
+│   │   ├── format_processing_stats.m               - 格式化处理统计
+│   │   ├── format_cell_array.m                     - 格式化元胞数组
+│   │   ├── get_network_field_meanings.m            - 获取字段中文映射
+│   │   ├── get_chinese_name.m                      - 获取字段中文名 
+│   │   ├── 
+│   │   └── 
+│   │
+│   ├── 
+│   │
+│   │
+│   │
+│   │
+│   └──
+
+
+
+

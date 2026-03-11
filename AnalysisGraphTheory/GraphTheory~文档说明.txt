@@ -1,0 +1,167 @@
+BarDayCount/	
+├── AnalysisGraphTheory/    % 图论分析
+│   ├── GraphTheory_processing.m        % 图论分析处理函数
+│   │   ├── GraphTheory_connectivity_module.m           % 全连接连通性分析
+│   ├── connectivity_network_pipeline   % 配对连通性分析管道
+│   │   ├── create_price_volume_pairs.m                 % 数据配对
+│   │   ├── GraphTheory_connectivity_pairwise_module.m  % 配对连通性分析
+│   │   │   ├── analyze_pairwise_connectivity.m       % 配对连通性分析模块
+│   │   │   ├── validate_connectivity_results.m       % 连通性分析结果验证
+│   │   │   ├── build_pair_network_complete.m         % 网络构建协调模块
+│   │   │   │    ├── network_construction_core.m         # 模块1：网络构建核心
+│   │   │   │    ├── edge_processing_module.m            # 模块2：边处理模块
+│   │   │   │    ├── network_statistics_calculator.m     # 模块3：统计计算模块
+│   │   │   ├── validate_network_structure.m           % 网络结构验证
+│   │   ├── GraphTheory_loop_structure.m                % 环结构分析
+│   │   ├── 
+│
+│
+├── phase/         % 相位分析    
+├── public/                                      % 结果保存目录
+│	├── calculate_OBV                           % 计算能量潮 OBV
+│	├── EM_smooth_field                     % 加权移动平均
+│	├── load_StockCode                      % 获取股票目录
+│	├── query_stock_Daydata                 % 查询日线股票数据
+│	├── calculate_multi_window_returns      % 多周期收益率计算
+│	└── data/                                   % 数据存放目录
+├─ main_analysis.m          % 主程序
+
+
+
+
+
+
+
+
+
+
+function connectivity_results = GraphTheory_connectivity_module(...
+    point_cloud, max_filtration, config)
+% 连通性深度分析模块
+%
+% 此模块专门分析点云的连通性特征，不进行拓扑计算，只关注图连通性。
+% 基于给定的过滤阈值，构建邻接图，分析连通分量、距离分布、中心性等特征。
+%
+% 输入参数:
+%   point_cloud    - n×d矩阵，n个点在d维空间中的坐标
+%   max_filtration - 标量，过滤阈值，决定点对是否连接
+%   config         - 结构体，配置参数（可选）:
+%       .verbose              - 是否显示详细信息，默认=true
+%       .compute_centrality   - 是否计算中心性，默认=true
+%       .compute_distance_dist - 是否计算距离分布，默认=true
+%       .compute_components   - 是否计算连通分量，默认=true
+%       .compute_diameter     - 是否计算图直径，默认=true
+%       .filtration_range     - 阈值范围，用于多阈值分析，默认=[]
+%
+% 输出参数:
+%   connectivity_results - 结构体，包含连通性分析结果:
+%     1、basic_info              - 基本图信息
+%           basic_info.n_points         % 节点数（90）
+%           basic_info.n_dims          % 数据维度
+%           basic_info.max_filtration  % 使用的过滤阈值
+%           basic_info.config          % 使用的配置参数
+%     2、distance_stats          - 距离统计
+%           distance_stats.min              % 最小距离
+%           distance_stats.max              % 最大距离
+%           distance_stats.median           % 距离中位数
+%           distance_stats.mean             % 平均距离
+%           distance_stats.std              % 距离标准差
+%           distance_stats.q25              % 25%分位数
+%           distance_stats.q75              % 75%分位数
+%           distance_stats.connection_ratio % 连接比例
+%           distance_stats.connected_pairs  % 连接点对数
+%           distance_stats.total_pairs      % 总点对数
+%           distance_stats.threshold        % 连接阈值
+%           distance_stats.hist_counts      % 距离分布直方图计数
+%           distance_stats.hist_edges       % 距离分布直方图边界
+%           distance_stats.hist_centers     % 距离分布直方图中心
+%           distance_stats.distance_matrix  % 距离矩阵引用
+%     3、graph_features          - 图特征
+%           graph_features.node_degrees                 % 节点度向量
+%           graph_features.mean_degree                  % 平均度
+%           graph_features.max_degree                   % 最大度
+%           graph_features.min_degree                   % 最小度
+%           graph_features.degree_std                   % 节点度标准差
+%           graph_features.degree_distribution.counts   % 度分布计数
+%           graph_features.degree_distribution.edges    % 度分布边界
+%           graph_features.graph_density                % 图密度
+%           graph_features.num_edges                    % 边数
+%           graph_features.num_nodes                    % 节点数
+%           graph_features.average_path_length          % 平均路径长度
+%           graph_features.graph_diameter               % 图直径
+%           graph_features.graph_radius                 % 图半径
+%           graph_features.clustering_coefficient_global % 全局聚类系数
+%           graph_features.adjacency_matrix             % 邻接矩阵引用
+%     4、component_analysis      - 连通分量分析
+%           component_analysis.n_components           % 连通分量数
+%           component_analysis.component_sizes        % 各分量大小
+%           component_analysis.component_ids          % 各节点所属分量ID
+%           component_analysis.max_component_size     % 最大分量大小
+%           component_analysis.max_component_id       % 最大分量ID
+%           component_analysis.max_component_ratio    % 最大分量占比
+%           component_analysis.max_component_nodes    % 最大分量中的节点
+%     5、centrality_analysis     - 中心性分析
+%           centrality_analysis.degree                  % 度中心性（标准化）
+%           centrality_analysis.betweenness            % 介数中心性（如果计算）
+%           centrality_analysis.closeness              % 接近中心性（如果计算）
+%           centrality_analysis.eigenvector            % 特征向量中心性（如果计算）
+%           centrality_analysis.top_nodes              % 各中心性前5节点
+%             top_nodes.degree.indices                 % 度中心性最高节点索引
+%             top_nodes.degree.values                  % 度中心性最高节点值
+%             top_nodes.betweenness.indices            % 介数中心性最高节点
+%             top_nodes.betweenness.values             % 介数中心性最高节点值
+
+%     6、robustness_analysis     - 鲁棒性分析
+%           robustness_analysis.random_attack          % 随机攻击鲁棒性
+%           robustness_analysis.targeted_attack        % 针对性攻击鲁棒性
+%           robustness_analysis.attack_results         % 攻击结果矩阵
+%           robustness_analysis.edge_robustness        % 边删除鲁棒性
+%     7、multiscale_analysis     - 多尺度分析（如果提供范围）
+%           multiscale_analysis.thresholds             % 阈值范围
+%           multiscale_analysis.n_components           % 各阈值下分量数
+%           multiscale_analysis.max_component_sizes    % 各阈值下最大分量大小
+%           multiscale_analysis.connection_ratios      % 各阈值下连接比例
+%           multiscale_analysis.graph_densities        % 各阈值下图密度
+%     8、visualization_data      - 可视化所需数据
+%           visualization_data.adjacency               % 邻接矩阵
+%           visualization_data.node_degrees            % 节点度
+%           visualization_data.component_ids           % 分量ID
+%           visualization_data.centrality              % 中心性数据
+%           visualization_data.distance_distribution   % 距离分布
+%           visualization_data.degree_distribution     % 度分布
+%     9、important_nodes         -重要节点信息）
+%           important_nodes.indices                    % 重要节点索引
+%           important_nodes.degrees                    % 重要节点度
+%           important_nodes.centrality_type            % 中心性类型
+%           important_nodes.centrality_values          % 中心性值
+%     10、edge_list              - 边列表 [n_edges×2]
+%     11、edge_weights           - 边权重 [n_edges×1]
+%     12、neighbors              - 邻居列表单元格数组
+%     13、distance_matrix        - 90×90 距离矩阵
+%     14、adjacency_matrix       - 90×90 邻接矩阵
+%     15、computation_status     - 计算状态
+%     16、computation_time       - 计算时间
+%     17、computation_duration   - 计算耗时
+%     18、distance_normalization - 距离标准化参数
+%     19、data_integrity         - 数据完整性检查
+%           data_integrity.has_distance_matrix         % 是否有距离矩阵
+%           data_integrity.has_adjacency_matrix        % 是否有邻接矩阵
+%           data_integrity.has_important_nodes         % 是否有重要节点
+%           data_integrity.has_edge_list               % 是否有边列表
+%           data_integrity.has_neighbors               % 是否有邻居列表
+%           data_integrity.check_time                  % 检查时间
+%
+% 算法步骤:
+%   1. 参数验证和默认配置
+%   2. 计算距离矩阵和统计
+%   3. 构建邻接图和连通分量
+%   4. 计算图的基本特征
+%   5. 计算节点中心性
+%   6. 分析图鲁棒性
+%   7. 多尺度连通性分析（可选）
+%   8. 准备可视化数据
+%
+% 示例:
+%   config = struct('verbose', true, 'compute_centrality', true);
+%   results = GraphTheory_connectivity_module(data, 1.803, config);
+end

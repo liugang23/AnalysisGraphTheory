@@ -1,0 +1,211 @@
+connectivity/     % 连通性分析
+│   ├── connectivity_pairwise_analyze_modular.m     % 模块化连通性分析主函数
+│   │    ├── correlation_analysis_module.m              % 关联性检测子模块
+│   │    ├── causality_analysis_module.m                % 因果性分析子模块
+│   │    ├── time_lag_analysis_module.m                 % 时滞估计子模块
+│   ├── detect_connectivity_analysis_results.m      % 连通性分析结果完整性检测函数 
+
+
+
+
+连通性分析模块 API 文档
+1. 模块总览
+
+模块名称：connectivity_pairwise_analyze_modular
+版本：3.0 (完善版)
+功能：对成对的时间序列（如股票收益率与成交量）进行多维度连通性分析，包括关系强度、因果关系、领先滞后关系，为图论网络构建提供“边”与“节点”的属性数据。
+设计哲学：模块化、可配置、结果统一、面向下游网络分析。
+
+2. 核心函数 API
+2.1 主分析函数
+    pairwise_results = connectivity_pairwise_analyze_modular(...
+        pair_data, pair_info, analysis_type, varargin)
+
+这是整个模块的总入口函数，负责调度所有子模块并整合结果。
+
+输入参数：
+
+参数名	             类 型	      必选	  描述与约束
+pair_data?	       cell(1×M)	    是	   配对数据元胞数组。每个元素为 N×2的数值矩阵，其中第一列为序列A（如收益率），第二列为序列B（如成交量）。
+
+pair_info?	       struct	         是      配对信息结构体。必须包含以下字段：
+                                            - pairs: 元胞数组，定义配对组合，如 {{'ret_5d', 'obv_5d'}, ...}。
+                                            - pair_descriptions: 元胞数组，配对的文本描述，如 {'5天收益→5天OBV'}。
+                                            - pair_types: 元胞数组，配对类型标识。
+                                            - pair_indices: 数值矩阵，配对在原始数据中的索引。
+
+analysis_type?      char	         是      分析类型字符串。决定执行哪些子分析：
+                                            - 'correlation': 仅计算相关系数。
+                                            - 'granger': 仅执行Granger因果检验。
+                                            - 'cross_correlation': 仅计算互相关系数与时滞。
+                                            - 'all': 执行以上所有线性分析。
+                                            - 'all_with_nonlinear': 执行所有分析，并包含非线性Granger检测。
+
+varargin?	     名称-值对	          否      详见表2.1.1。用于精细控制分析过程的各项参数。
+
+表2.1.1：可选参数 (varargin)：
+
+参数名	                     默认值            描述
+'max_lag'?	                  5             最大滞后阶数。用于Granger检验和互相关分析，控制考察的时间窗口。值越大，模型越复杂，所需样本量越多。
+'significance_level'?	      0.05          显著性水平 (α)。用于所有统计检验的显著性判断阈值 (p < α)。
+'bootstrap_reps'?	          1000          自助法重复次数。用于相关性分析 (enable_bootstrap=true时) 评估相关系数的稳定性。设为0禁用。
+'enable_robustness_check'?	  false         启用鲁棒性检查。若为true，将对分析结果进行额外的稳定性评估（如自助法、加噪法），但显著增加计算时间。
+'robustness_n_bootstrap'?	  200           鲁棒性检查的自助法次数。仅在启用鲁棒性检查时生效。
+'robustness_noise_level'?     0.01          鲁棒性检查的噪声水平。用于“加噪法”评估，表示添加噪声相对于原始序列标准差的比率。
+'robustness_threshold'?	      0.7           鲁棒性评分阈值。鲁棒性评分 ≥ 此阈值，结果才被标记为 is_robust = true。
+'enable_nonlinear_test'?	  false         启用非线性Granger检测。若为true，在Granger分析中增加BDS检验，以探测线性检验无法捕捉的纯粹非线性因果关系。
+'bds_m'?	                  2:5           BDS检验的嵌入维度数组。控制非线性检测的复杂度，如 [2,3,4,5]。
+'bds_epsilon'?	              0.5:0.5:1.5	BDS检验的距离阈值数组。通常设置为标准差的倍数。
+'verbose'?	                  true          详细输出控制。true在控制台显示处理进度和摘要；false为静默模式。
+
+输出参数? (pairwise_results)：
+
+一个结构体，包含以下核心字段，用于下游网络构建。
+
+字段名                    类型	             描述与用途
+pair_info?	             cell(M×1)	      节点对的元信息。每个元素是一个结构体，描述一个配对的基本信息和数据尺度。用于标识网络中的“边”所连接的节点。
+connectivity?	         cell(M×1)	      连通性分析的核心结果。每个元素是一个结构体，包含所选分析类型计算出的所有统计量（如相关系数、F值、p值等）。这是构建网络“边权重”和“边属性”的主要数据源。
+significance?	         cell(M×1)	      显著性判断。每个元素是一个布尔值 (true/false)，表示该配对在给定的显著性水平下是否存在任何显著的连通性关系。用于初步筛选显著的边。
+lag_info?	             cell(M×1)	      滞后信息。每个元素是一个结构体，汇总了该配对在各类分析中得到的最优滞后信息。为“边”提供时间属性（领先/滞后多久）。
+fingerprint_features?    cell(M×1)	       指纹特征向量。每个元素是一个结构体，将多种分析结果编码为一个数值特征向量。专门用于节点对的相似性比较、聚类或作为机器学习特征。
+analysis_type?	         char	           记录本次运行所使用的分析类型。
+parameters?	             struct	          记录本次运行的所有输入参数，确保结果可复现。
+processing_stats?	     struct	          处理过程的统计信息（成功、跳过、失败数量，计算时间）。
+timestamp?	             char	          分析完成的时间戳。
+version?	             char	          模块版本号。
+
+（以下字段仅在 params.enable_robustness = true时存在）
+
+| robustness? | cell(M×1) | 鲁棒性检查的详细结果结构体。 |
+
+| robustness_score? | cell(M×1) | 鲁棒性评分 (0-1)。 |
+
+| is_robust? | cell(M×1) | 布尔值，标记该连接是否通过鲁棒性检查。 |
+
+3. 核心输出数据结构详解
+3.1 pair_info{i}结构
+
+包含配对 i的标识信息和数据元数据。
+
+字段	                 类型	        描述
+label	               char	       配对的可读标签，如 '5天收益→5天OBV'。
+ret_name, obv_name	   char	       配对中两个序列的名称。对应网络中的两个节点。
+ret_idx, obv_idx	   double	   两个序列在原始数据矩阵中的索引。
+n_valid	               double	   用于分析的有效观测值数量。
+ret_mean, ret_std?	    double	    序列A（如收益）的均值和标准差。
+obv_mean, obv_std?	    double	    序列B（如OBV）的均值和标准差。
+scale_note	           char	       重要说明：所有输出统计量基于原始数据尺度，未进行(X-mean)/std标准化，以保证跨配对可比性。
+
+3.2 connectivity{i}结构
+
+此结构内容取决于 analysis_type。以下是各分析类型下的关键字段。
+
+3.2.1 当 analysis_type = 'correlation'
+
+字段	                 类型	            描述
+correlation	          double	      皮尔逊相关系数 (r)。取值[-1,1]，衡量线性关系强度。可直接作为无向边的权重。
+p_value	              double	      相关系数的显著性p值。
+r_squared             double	       决定系数 (R?)，等于 correlation^2。
+confidence_interval	  double(1×2)	  自助法计算的相关系数95%置信区间（如启用）。
+significant	          logical	       是否显著 (p_value < alpha)。
+
+3.2.2 当 analysis_type = 'granger'或包含Granger分析
+
+字段	                                    类型	                描述
+                                                            因果方向。核心输出，取值：
+direction?	                               char              - 'x_to_y': X → Y (序列1导致序列2)
+                                                            - 'y_to_x': Y → X
+                                                            - 'bidirectional': X ? Y (双向因果关系)
+                                                            - 'none': 无显著因果关系
+                                                            用于定义网络边的方向。
+
+f_statistic_x2y?	                       double	         X→Y 方向的F统计量。衡量X的过去值对预测Y的改善程度。值越大，因果效应越强。可直接作为有向边 (X→Y)? 的权重。
+f_statistic_y2x?	                       double            Y→X 方向的F统计量。作为有向边 (Y→X) 的权重。
+p_value_x2y, p_value_y2x                  double            两个方向的显著性p值。
+optimal_lag?                               double            VAR模型的最优滞后阶数 (p)。这是一个统一的滞后，表示因果效应发生的大致时间跨度。是模型的属性，非方向属性。
+is_significant_x2y, is_significant_y2x	  logical	        两个方向的显著性布尔值。
+variance_explained_x2y?	                   double	         X→Y 的解释方差比例 (R?)。表示加入X的滞后项后，对Y方程预测方差的提升比例。取值[0,1)，是因果效应强度的另一度量。
+variance_explained_y2x?	                   double	         Y→X 的解释方差比例。
+effect_size_x2y, effect_size_y2x	      double	        标准化回归系数，表示一个单位X变化引起Y的预期变化（基于原始尺度）。
+rss_r_x2y, rss_u_x2y, ...	              double	         残差平方和，用于内部计算。
+connection_type	                          char	            关系类型 ('linear_only', 'nonlinear_only', 'both', 'none')，综合了线性和非线性结果。
+
+3.2.3 当 analysis_type = 'cross_correlation'
+
+字段                类型	            描述
+
+max_cross_corr?	      double	        最大互相关系数。取值[-1,1]，是领先滞后关系强度的度量。
+
+                                       最佳滞后阶数。关键字段：
+                                        - > 0: X 领先 Y optimal_lag期
+optimal_lag          double             - < 0: Y 领先 X abs(optimal_lag)期
+                                        - = 0: 同步
+                                        精确给出了“领先多久”的答案。
+p_value	              double	        最大互相关系数的显著性p值。
+cross_corr_function	  double(vector)	完整互相关函数值数组。
+lags	              double(vector)	对应的滞后阶数数组。
+significant_lags	  double(vector)	所有显著的滞后点。
+
+3.2.4 当 analysis_type = 'all'或 'all_with_nonlinear'
+此时 connectivity{i}是一个“容器”结构体，包含以上三个子模块的结果作为其子字段：
+    connectivity{i}.correlation: 相关性结果结构体
+    connectivity{i}.granger: Granger结果结构体
+    connectivity{i}.cross_correlation: 互相关结果结构体
+下游可根据需要从相应子结构中提取数据。
+
+3.3 fingerprint_features{i}结构
+
+专为相似性度量设计的特征向量。
+
+字段	                     类型	                  描述
+feature_vector?            double(vector)	      核心特征向量。将连通性信息编码为一个数值数组。对于'all'分析，它可能是[r, p_corr, F_x2y, F_y2x, optimal_lag_granger, max_ccf, optimal_lag_ccf, ...]的组合。用于计算配对之间的欧氏距离、余弦相似度等。
+feature_dimension	      double	             特征向量的长度。
+pair_label	              char	                 配对标识。
+analysis_type	          char	                 来源分析类型。
+is_robust(可选)	        logical	               是否鲁棒（如果启用了鲁棒性检查）。
+robustness_score(可选)	double	               鲁棒性评分。
+
+4. 下游网络构建指南
+4.1 构建邻接矩阵（权重矩阵）
+
+根据您的网络模型，从 pairwise_results中提取数据填充 N×N的邻接矩阵 A(其中 N为股票/节点数量)。
+1、确定边权重：
+    相关性网络：A(i,j) = A(j,i) = connectivity{k}.correlation(无向，对称)。
+    Granger因果网络? (有向)：
+        A(i,j) = connectivity{k}.f_statistic_x2y(如果 direction包含 x_to_y)
+        A(j,i) = connectivity{k}.f_statistic_y2x(如果 direction包含 y_to_x)
+	领先滞后网络? (有向，权重为相关性)：A(i,j) = connectivity{k}.max_cross_corr(当 optimal_lag > 0，表示 i 领先 j)。
+
+2、确定边方向：
+    从 connectivity{k}.direction读取。
+    从 connectivity{k}.optimal_lag(互相关) 的符号读取。
+
+3、边筛选：
+    使用 significance{k} == true进行初步筛选。
+    进一步使用 p_value或 p_value_x2y/p_value_y2x进行更严格的阈值筛选。
+    可选：使用 is_robust{k} == true筛选高稳定性连接。
+
+4.2 构建边属性表
+对于每条边（每个配对 i），可以创建一个属性行：
+
+源节点	     目标节点	  权重(F/r)	       方向	      最优滞后	    解释方差	          显著性p值	       是否鲁棒
+ret_name    obv_name    f_statistic_x2y	  direction	optimal_lag	  variance_explained_x2y	p_value_x2y	    is_robust
+
+此表可直接导入Gephi、Cytoscape等网络可视化与分析工具。
+
+4.3 使用指纹特征进行高级分析
+社群发现：计算所有配对 fingerprint_features{i}.feature_vector之间的相似性矩阵，构建一个全连接相似性网络，再对此网络进行聚类，可发现具有相似价量关系模式的股票群落。
+机器学习：将 feature_vector作为特征，预测其他属性（如板块、风险标签）。
+
+5. 重要提醒
+数据平稳性：Granger因果检验要求输入序列平稳。务必在调用本函数前，对收益率序列、OBV序列（或△OBV）进行平稳性检验与处理。
+权重可比性：本模块已禁用数据标准化，输出的 F统计量、效应大小等基于原始尺度，具有跨配对可比性，可直接用作边权重。
+计算资源：启用鲁棒性检查 (enable_robustness_check=true) 或非线性检测 (enable_nonlinear_test=true) 会显著增加计算时间，请根据数据规模谨慎选择。
+结果解读：optimal_lag(Granger) 是模型阶数，表示因果关系的时间窗口，而非精确的滞后点数。optimal_lag(互相关) 则给出了精确的领先/滞后周期。
+文档版本：1.0
+对应代码版本：3.0 (完善版)
+最后更新：基于您提供的完整代码集成文档生成。
+
+此API文档为您提供了一个从函数调用、参数解析到结果提取和下游应用的完整路线图，是使用此连通性分析模块的权威参考。
+
+

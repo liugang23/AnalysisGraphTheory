@@ -1,0 +1,43 @@
+BarDayCount/	
+├─ markov_analysis/    % 马尔科夫分析模块
+│   ├─ phase1_basic/          % 第一阶段：基础马尔科夫
+│   │   ├─ analyze_network_markov_basic.m           1% 主函数
+│   │   ├─ define_basic_states.m                    2% 状态定义
+│   │   ├─ estimate_transition_matrix.m             3% 转移概率估计
+│   │   ├─ validate_markov_property.m               4% 性质验证
+│   │   ├─ calculate_steady_state_distribution.m    5% 稳态分布计算
+│   │   ├─ plot_markov_results.m                    % 可视化函数
+│   │   ├─ generate_markov_analysis_report.m        % 报告生成
+│   │   ├─ chi2_test_markov.m                       % 卡方检验实现
+│   │   ├─ likelihood_ratio_test_markov.m           % 似然比检验
+│   │   ├─ bootstrap_test_markov.m                  % 自助法检验
+│   │   ├─ extract_network_features_series.m        % 特征提取
+│   │   ├─ calculate_state_durations.m              % 状态持续时间计算
+│   
+│
+│
+
+
+
+阶段1：基础马尔科夫分析
+% 最简单的实现：二状态马尔科夫模型
+% 状态1: 网络密度增加（连接增强）
+% 状态2: 网络密度减少（连接减弱）
+
+% 分析连接强度的马尔科夫特性
+
+阶段2：网络结构状态分析
+% 基于您的9个分析模块结果
+% 定义4-5个有意义的网络状态
+% 分析这些状态之间的转移规律
+
+阶段3：隐藏马尔科夫模型
+% 对关键节点（如中心性最高的节点）
+% 构建HMM识别隐藏的市场状态
+
+
+
+
+
+
+

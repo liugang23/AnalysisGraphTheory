@@ -1,0 +1,331 @@
+network_build/     % 网络构建
+│   ├── build_pair_network_complete.m               % 配对连通性网络构建主协调模块
+│   │    ├── network_construction_core.m                % 网络构建核心模块
+│   │    ├── edge_processing_module.m                   % 边处理模块
+│   │    ├── network_statistics_calculator.m            % 网络统计计算模块
+│   ├── validate_network_structure.m                % 网络构建结果基础验证
+│   ├── plot_network_structure                 % 网络构建结果结构验证图
+
+
+
+
+网络构建系统文档
+? 概述
+
+网络构建系统是金融网络分析工具箱的核心模块，负责从配对分析结果构建网络结构，包括网络矩阵初始化、统计指标计算和数据验证。
+
+? 模块架构
+主要模块组成
+网络构建系统
+├── network_construction_core.m    (模块1) 网络构建核心
+├── network_statistics_calculator.m (模块3) 网络统计计算
+└── validate_network_structure.m   (模块4) 网络结构验证
+
+? 输入参数说明
+1. 主函数调用参数
+    [pair_network, network_stats, node_statistics, validation_report] = ...
+        network_construction(pairwise_results, analysis_type, varargin)
+
+参数	               类型	 必需	  默认值	 说明
+pairwise_results	结构体	   是     -	     配对分析结果
+analysis_type	    字符	    是	  -	      分析类型：'correlation' 或 'granger'
+varargin	        单元格	   否	 -	     可选参数对
+
+2. pairwise_results 结构体
+    % 必需字段
+    pairwise_results.pair_info = struct数组;  % 配对信息
+    pairwise_results.corr_matrix = 矩阵;     % 相关矩阵（相关分析）
+    pairwise_results.granger_results = 结构体; % Granger因果结果
+
+    % 可选字段
+    pairwise_results.var_names = 单元格;      % 变量名称
+    pairwise_results.time_info = 结构体;      % 时间信息
+    pairwise_results.config = 结构体;         % 配置信息
+
+3. 可选参数（名称-值对）
+    % 网络构建参数
+    'correlation_threshold', 0.8          % 相关阈值
+    'p_value_threshold', 0.05             % p值阈值
+    'granger_f_stat', 3.0                 % Granger F统计量阈值
+    'min_lag', 1                          % 最小滞后阶数
+    'max_lag', 5                          % 最大滞后阶数
+
+    % 输出控制参数
+    'display_progress', true              % 显示进度
+    'validation_level', 'standard'        % 验证级别
+    'save_intermediate', false            % 保存中间结果
+    'output_path', './output/'            % 输出路径
+
+? 输出结果说明
+1. pair_network（主网络结构）
+% 节点信息
+pair_network.node_info
+├── node_labels       : 1×n 单元格       % 节点标签
+├── node_index_map    : Map容器          % 节点名称到索引的映射
+├── ret_nodes         : 1×m 单元格       % 收益节点标签
+├── obv_nodes         : 1×k 单元格       % OBV节点标签
+├── ret_indices       : 1×m 数组         % 收益节点索引
+├── obv_indices       : 1×k 数组         % OBV节点索引
+├── n_nodes           : 标量             % 总节点数
+└── node_extraction_stats : 结构体       % 节点提取统计
+
+% 网络矩阵
+pair_network.network_matrices
+├── adjacency         : n×n 稀疏矩阵     % 邻接矩阵（二进制，0/1）
+├── weights           : n×n 稀疏矩阵     % 权重矩阵（相关强度）
+├── directions        : n×n 稀疏矩阵     % 方向矩阵（1=正，-1=负）
+├── lags              : n×n 稀疏矩阵     % 滞后阶数（仅Granger）
+└── significance      : n×n 稀疏矩阵     % 显著性水平（p值）
+
+% 构建信息
+pair_network.build_info
+├── creation_time     : 字符串           % 创建时间
+├── analysis_type     : 字符串           % 分析类型
+├── n_edges           : 标量             % 总边数
+├── density           : 标量             % 网络密度
+└── parameters        : 结构体           % 构建参数
+
+2. network_stats（网络级统计）
+network_stats
+├── basic_stats                      % 基本统计
+│   ├── n_edges           : 标量     % 边数
+│   ├── n_edges_directed  : 标量     % 有向边数
+│   ├── density           : 标量     % 网络密度
+│   └── is_connected      : 逻辑值   % 是否连通
+│
+├── degree_stats                     % 度分布统计
+│   ├── min               : 标量     % 最小度
+│   ├── max               : 标量     % 最大度
+│   ├── mean              : 标量     % 平均度
+│   ├── std               : 标量     % 标准差
+│   ├── median            : 标量     % 中位数
+│   └── variance          : 标量     % 方差
+│
+├── path_stats                       % 路径统计
+│   ├── average_path_length : 标量   % 平均路径长度
+│   ├── diameter            : 标量   % 网络直径
+│   └── global_efficiency   : 标量   % 全局效率
+│
+├── clustering_stats                 % 聚类统计
+│   ├── global_clustering    : 标量   % 全局聚类系数
+│   ├── avg_local_clustering : 标量  % 平均局部聚类系数
+│   └── transitivity         : 标量   % 传递性
+│
+├── centrality_stats                 % 中心性统计
+│   ├── degree_centrality    : 结构体  # 度中心性
+│   ├── closeness_centrality : 结构体  # 接近中心性
+│   ├── betweenness_centrality:结构体  # 介数中心性
+│   └── eigenvector_centrality:结构体 # 特征向量中心性
+│
+└── advanced_stats                   % 高级统计
+    ├── modularity          : 标量     % 模块度
+    ├── assortativity       : 标量     % 同配性
+    ├── small_worldness     : 标量     % 小世界性
+    └── community_structure : 结构体    # 社区结构
+
+3. node_statistics（节点级统计）
+node_statistics
+├── basic_stats                    % 节点基本统计
+│   ├── node_degrees        : n×1 数组  % 节点度
+│   ├── weighted_degrees    : n×1 数组  % 加权度
+│   └── degree_distribution : 结构体    # 度分布
+│
+├── centrality_scores             % 中心性分数
+│   ├── degree_centrality    : n×1 数组  # 度中心性
+│   ├── closeness_centrality : n×1 数组  # 接近中心性
+│   ├── betweenness_centrality: n×1 数组  # 介数中心性
+│   ├── eigenvector_centrality: n×1 数组  # 特征向量中心性
+│   └── pagerank_centrality  : n×1 数组  # PageRank中心性
+│
+├── clustering_coeffs             % 聚类系数
+│   ├── local_clustering  : n×1 数组  # 局部聚类系数
+│   └── triangle_count    : n×1 数组  # 三角形计数
+│
+├── path_metrics                  % 路径度量
+│   ├── eccentricity      : n×1 数组  # 离心率
+│   ├── closeness         : n×1 数组  # 接近性
+│   └── radiality         : n×1 数组  # 径向性
+│
+├── community_affiliation         % 社区归属
+│   ├── community_id      : n×1 数组  # 社区ID
+│   ├── community_size    : 结构体    # 社区大小
+│   └── modularity_contribution: n×1数组 # 模块度贡献
+│
+├── neighbor_stats                % 邻居统计
+│   ├── avg_neighbor_degree  : n×1 数组  # 平均邻居度
+│   ├── degree_assortativity : n×1 数组  # 度同配性
+│   └── neighbor_overlap    : n×n 矩阵   # 邻居重叠
+│
+└── type_specific_stats           % 类型特定统计
+    ├── ret_nodes_stats   : 结构体    # 收益节点统计
+    └── obv_nodes_stats   : 结构体    # OBV节点统计
+
+4. validation_report（验证报告）
+validation_report
+├── basic_validation               % 基本验证
+│   ├── passed_checks    : 单元格     # 通过的检查
+│   ├── failed_checks    : 单元格     # 失败的检查
+│   ├── warnings         : 单元格     # 警告信息
+│   └── errors          : 单元格     # 错误信息
+│
+├── structural_validation         % 结构验证
+│   ├── adjacency_valid  : 逻辑值    # 邻接矩阵有效性
+│   ├── weight_valid     : 逻辑值    # 权重矩阵有效性
+│   ├── symmetry_valid   : 逻辑值    # 对称性检查
+│   └── dimension_valid  : 逻辑值    # 维度一致性
+│
+├── statistical_validation         % 统计验证
+│   ├── degree_dist_valid: 逻辑值    # 度分布验证
+│   ├── path_stat_valid  : 逻辑值    # 路径统计验证
+│   ├── clustering_valid : 逻辑值    # 聚类系数验证
+│   └── centrality_valid : 逻辑值    # 中心性验证
+│
+├── numerical_validation          % 数值验证
+│   ├── value_ranges     : 结构体    # 值域检查
+│   ├── nan_inf_count   : 结构体    # NaN/Inf计数
+│   ├── symmetry_errors : 矩阵      # 不对称误差
+│   └── tolerance_stats : 结构体    # 容差统计
+│
+└── summary                       % 验证摘要
+    ├── overall_result  : 字符串     # 总体结果
+    ├── validation_time : 标量       # 验证耗时
+    ├── basic_stats     : 结构体    # 基本统计
+    └── recommendations: 单元格     # 改进建议
+
+? 内部函数详细说明
+1. network_construction_core.m
+功能: 网络构建核心模块，初始化网络结构
+输入:
+    [pairwise_results, analysis_type, param_info]
+
+处理流程:
+    从pairwise_results提取节点信息
+    创建节点索引映射
+    初始化网络矩阵
+    填充邻接矩阵
+    计算边权重
+    记录方向信息
+    记录滞后信息
+    记录显著性水平
+
+输出字段详解:
+    node_index_map: 容器Map，键为节点名，值为索引
+    node_labels: 包含所有节点名称的单元格数组
+    ret_nodes/obv_nodes: 分类节点列表
+    adjacency: 稀疏布尔矩阵，表示连接关系
+    weights: 权重值矩阵（相关强度或Granger F值）
+    directions: 方向矩阵（1=正向，-1=负向）
+    lags: 最佳滞后阶数矩阵
+    significance: 显著性p值矩阵
+
+2. network_statistics_calculator.m
+功能: 计算网络拓扑统计指标
+主要计算的统计量:
+统计量	          公式/计算	                             意义
+网络密度	    density=N(N?1)2E	?	               实际边数与最大可能边数之比
+聚类系数        Ci=ki?(ki?1)2Ti                        节点邻居间的连接程度
+平均路径长度    L=N(N?1)1∑i=jdij	?	                节点间平均最短距离
+模块度          Q=2m1∑ij[Aij?2mki?kj]δ(ci?,cj)        社区结构强度
+度中心性  	    CD(i)=N?1ki	?	                       节点直接连接数归一化
+接近中心性	   CC(i)=∑j=i?dijN?1	?                 节点到其他节点的平均距离倒数
+介数中心性	   CB(i)=∑s=i=tσstσst(i)	           节点在最短路径中的中介作用
+
+3. validate_network_structure.m
+功能: 网络结构验证和质量控制
+验证级别:
+    basic: 基本结构验证（必需）
+    standard: 基本+数值合理性验证（推荐）
+    strict: 完整验证，包括一致性检查
+
+验证项目:
+    1、必需字段检查
+    2、维度一致性验证
+    3、值域合理性检查
+    4、对称性检查（无向图）
+    5、自环检查
+    6、NaN/Inf值检查
+    7、与源数据一致性检查
+    8、孤立节点检查
+
+? 数据结构示例
+最小化网络构建示例
+
+    % 输入参数
+    pairwise_results = load('pairwise_analysis_results.mat');
+    analysis_type = 'correlation';
+
+    % 构建网络
+    [pair_network, network_stats, node_statistics, validation_report] = ...
+        network_construction(pairwise_results, analysis_type, ...
+        'correlation_threshold', 0.7, ...
+        'p_value_threshold', 0.01, ...
+        'display_progress', true);
+
+    % 访问结果
+    node_labels = pair_network.node_labels;           % 节点名称
+    adjacency = pair_network.network_matrices.adjacency;  % 邻接矩阵
+    weights = pair_network.network_matrices.weights;     % 权重矩阵
+
+    % 网络统计
+    density = network_stats.basic_stats.density;     % 网络密度
+    clustering = network_stats.clustering_stats.global_clustering;  % 聚类系数
+    avg_path = network_stats.path_stats.average_path_length;  % 平均路径长度
+
+    % 节点统计
+    degree_centrality = node_statistics.centrality_scores.degree_centrality;  % 度中心性
+    betweenness = node_statistics.centrality_scores.betweenness_centrality;  % 介数中心性
+    Granger因果网络示例
+
+% Granger因果网络
+    pairwise_results = load('granger_results.mat');
+    analysis_type = 'granger';
+
+    [pair_network, stats, node_stats, validation] = ...
+        network_construction(pairwise_results, analysis_type, ...
+        'granger_f_stat', 2.5, ...
+        'p_value_threshold', 0.05, ...
+        'min_lag', 1, ...
+        'max_lag', 3);
+
+    % 访问Granger特定信息
+    lags = pair_network.network_matrices.lags;        % 滞后阶数
+    directions = pair_network.network_matrices.directions;  % 因果关系方向
+
+? 网络矩阵格式说明
+1. 相关网络（无向）
+    邻接矩阵: symmetric, binary (0/1)
+    权重矩阵: symmetric, continuous [0,1]
+    方向矩阵: all 1 (positive correlation)
+2. Granger因果网络（有向）
+    邻接矩阵: asymmetric, binary (0/1)
+    权重矩阵: asymmetric, continuous (F-statistic)
+    方向矩阵: causal direction (+1 for X->Y)
+    滞后矩阵: best lag order
+
+? 验证报告解读
+验证结果等级
+    通过: 所有必需检查通过，可安全使用网络
+    警告: 通过必需检查，但存在潜在问题
+    失败: 必需检查失败，网络不可用
+
+常见警告及处理
+   1、 自环检测: 检查是否允许自相关
+   2、 不对称矩阵: 检查是否应为对称网络
+   3、 值域异常: 检查权重是否在合理范围
+   4、 孤立节点: 考虑是否保留或过滤
+   5、 维度不匹配: 检查节点标签与矩阵维度
+
+?? 配置参数参考
+阈值参数
+
+参数          相关分析推荐值         Granger因果推荐值        说明
+相关性阈值     0.6-0.8               N/A                     相关性强度阈值
+p值阈值        0.01-0.05             0.01-0.05               统计显著性
+F统计量阈值    N/A                   2.0-3.0                 Granger因果强度
+
+性能参数
+参数          推荐值             说明
+最大节点数      100-500          内存限制
+并行计算        true            大网络启用并行
+稀疏存储        true            大型网络使用稀疏矩阵
+
